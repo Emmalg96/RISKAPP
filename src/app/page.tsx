@@ -11,8 +11,10 @@ export default function HomePage() {
           HER2 Risk Dashboard
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
-          Scan risks with protocol and product requirement context. Filter by euRMW / dRMW, risk source and scope,
-          DP52 / DP61 project, and free-text search across risk lines, summaries, PRs, and protocols.
+          One block per product requirement (PR): linked risks, requirement text, and protocols. Filter by euRMW / dRMW,
+          risk source and scope, DP52 / DP61 project, and search. Use <strong className="font-medium text-foreground">By PR</strong>{" "}
+          in the filter panel (default); switch to <strong className="font-medium text-foreground">All rows</strong> for the
+          legacy one-card-per-row list.
         </p>
       </header>
       <Her2RiskDashboard />

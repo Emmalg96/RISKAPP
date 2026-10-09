@@ -2,6 +2,8 @@
 
 Standalone web app for browsing the **Explorer** sheet from the HER2 traceability workbook: risks, product requirements (PR), and protocols with filters for **DP52 / DP61**, **euRMW / dRMW**, **RiskSource**, **RiskScope**, and search.
 
+**Default layout — By PR:** one block per `ProductRequirement` with **linked risks** (left), **PR text** (center), and **linked protocols** (right). Use **All rows** to restore the previous one-card-per-explorer-row view.
+
 This repository contains **only** the HER2 dashboard (no PCS verification tooling).
 
 ## Prerequisites
@@ -58,8 +60,8 @@ Runtime data: `public/data/her2-explorer.json` (407 rows in the bundled export).
 
 ## Project layout
 
-- `src/components/her2-risk-dashboard.tsx` — UI (RISKS · PR · PROTOCOL cards + filters)
-- `src/lib/her2-explorer.ts` — Types and filter helpers
+- `src/components/her2-risk-dashboard.tsx` — UI (PR hub layout + filters; toggle **By PR** / **All rows**)
+- `src/lib/her2-explorer.ts` — Types, filters, and PR grouping helpers
 - `scripts/export_her2_explorer.py` — Excel → JSON export
 - `data/source/` — Source workbook (not required at runtime if JSON is present)
 - `public/data/her2-explorer.json` — Dataset loaded by the app

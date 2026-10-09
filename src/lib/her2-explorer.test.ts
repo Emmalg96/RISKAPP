@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   filterHer2ExplorerRows,
+  groupHer2ExplorerRowsByProductRequirement,
   rowRmwFamily,
   type Her2ExplorerRow,
 } from "./her2-explorer";
@@ -54,5 +55,40 @@ describe("her2-explorer", () => {
     });
     assert.equal(euOnly.length, 1);
     assert.equal(euOnly[0]?.RiskLine, "euRMW-risk-001");
+  });
+
+  it("groups rows by product requirement and dedupes risks and protocols", () => {
+    const rows = [
+      sample,
+      { ...sample, Protocol: "DP52-VEP-010", RiskLine: "dRMW-risk-002" },
+      { ...sample, ProductRequirement: "PR.02", Protocol: "DP52-VEP-012" },
+    ];
+    const blocks = groupHer2ExplorerRowsByProductRequirement(rows);
+    assert.equal(blocks.length, 2);
+    const pr01 = blocks.find((b) => b.productRequirement === "PR.01");
+    assert.ok(pr01);
+    assert.equal(pr01.risks.length, 2);
+    assert.equal(pr01.protocols.length, 2);
+    assert.equal(pr01.rowCount, 2);
+  });
+
+  it("keeps only filtered risks and protocols inside a PR block", () => {
+    const rows = [
+      sample,
+      { ...sample, RiskSource: "LBN-euRMW-020", RiskLine: "euRMW-risk-001", Protocol: "DP52-VEP-010" },
+    ];
+    const euOnly = filterHer2ExplorerRows(rows, {
+      project: "all",
+      rmwFamilies: ["euRMW"],
+      riskSources: [],
+      riskScopes: [],
+      search: "",
+    });
+    const blocks = groupHer2ExplorerRowsByProductRequirement(euOnly);
+    assert.equal(blocks.length, 1);
+    assert.equal(blocks[0]?.risks.length, 1);
+    assert.equal(blocks[0]?.risks[0]?.riskLine, "euRMW-risk-001");
+    assert.equal(blocks[0]?.protocols.length, 1);
+    assert.equal(blocks[0]?.protocols[0]?.protocol, "DP52-VEP-010");
   });
 });

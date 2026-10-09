@@ -105,3 +105,148 @@ export function toggleMultiValue(current: string[], value: string): string[] {
 export function toggleRmwFamily(current: RmwFamily[], family: RmwFamily): RmwFamily[] {
   return current.includes(family) ? current.filter((f) => f !== family) : [...current, family];
 }
+
+export type Her2ViewMode = "byPr" | "allRows";
+
+export type Her2LinkedRisk = {
+  riskLine: string;
+  riskSummary: string;
+  riskSource: string;
+  riskScope: string;
+  rmwFamily: RmwFamily | "other";
+};
+
+export type Her2LinkedProtocol = {
+  protocol: string;
+  acceptanceCriteriaStatus: string;
+  protocolAcceptanceCriteria: string;
+  overarchingAcceptanceCriteria: string;
+};
+
+export type Her2ProductRequirementBlock = {
+  productRequirement: string;
+  requirementText: string;
+  projects: string[];
+  riskScopes: string[];
+  risks: Her2LinkedRisk[];
+  protocols: Her2LinkedProtocol[];
+  rowCount: number;
+};
+
+function linkedRiskKey(row: Her2ExplorerRow): string {
+  const line = (row.RiskLine ?? "").trim().toLowerCase();
+  if (line) return `line:${line}`;
+  const summary = (row.RiskSummary ?? "").trim().toLowerCase();
+  const source = (row.RiskSource ?? "").trim().toLowerCase();
+  return `fallback:${summary}|${source}`;
+}
+
+function linkedProtocolKey(row: Her2ExplorerRow): string | null {
+  const protocol = (row.Protocol ?? "").trim();
+  if (!protocol || protocol.toLowerCase() === "nan") return null;
+  return protocol.toLowerCase();
+}
+
+function preferLongerText(current: string, next: string): string {
+  const a = (current ?? "").trim();
+  const b = (next ?? "").trim();
+  if (!a) return b;
+  if (!b) return a;
+  return b.length > a.length ? b : a;
+}
+
+function mergeProtocol(existing: Her2LinkedProtocol, row: Her2ExplorerRow): Her2LinkedProtocol {
+  return {
+    protocol: existing.protocol || row.Protocol,
+    acceptanceCriteriaStatus: preferLongerText(existing.acceptanceCriteriaStatus, row.AcceptanceCriteriaStatus),
+    protocolAcceptanceCriteria: preferLongerText(
+      existing.protocolAcceptanceCriteria,
+      row.ProtocolAcceptanceCriteria,
+    ),
+    overarchingAcceptanceCriteria: preferLongerText(
+      existing.overarchingAcceptanceCriteria,
+      row.OverarchingAcceptanceCriteria,
+    ),
+  };
+}
+
+export function groupHer2ExplorerRowsByProductRequirement(
+  rows: Her2ExplorerRow[],
+): Her2ProductRequirementBlock[] {
+  const groups = new Map<string, Her2ExplorerRow[]>();
+
+  for (const row of rows) {
+    const pr = (row.ProductRequirement ?? "").trim();
+    const key = pr || "—";
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  const blocks: Her2ProductRequirementBlock[] = [];
+
+  for (const [productRequirement, groupRows] of groups) {
+    const riskMap = new Map<string, Her2LinkedRisk>();
+    const protocolMap = new Map<string, Her2LinkedProtocol>();
+    let requirementText = "";
+
+    for (const row of groupRows) {
+      requirementText = preferLongerText(requirementText, row.RequirementText);
+
+      const rk = linkedRiskKey(row);
+      if (!riskMap.has(rk)) {
+        riskMap.set(rk, {
+          riskLine: row.RiskLine,
+          riskSummary: row.RiskSummary,
+          riskSource: row.RiskSource,
+          riskScope: row.RiskScope,
+          rmwFamily: rowRmwFamily(row),
+        });
+      }
+
+      const pk = linkedProtocolKey(row);
+      if (pk) {
+        const existing = protocolMap.get(pk);
+        if (!existing) {
+          protocolMap.set(pk, {
+            protocol: row.Protocol,
+            acceptanceCriteriaStatus: row.AcceptanceCriteriaStatus,
+            protocolAcceptanceCriteria: row.ProtocolAcceptanceCriteria,
+            overarchingAcceptanceCriteria: row.OverarchingAcceptanceCriteria,
+          });
+        } else {
+          protocolMap.set(pk, mergeProtocol(existing, row));
+        }
+      }
+    }
+
+    const sortRisk = (a: Her2LinkedRisk, b: Her2LinkedRisk) =>
+      displayValue(a.riskLine).localeCompare(displayValue(b.riskLine), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+
+    const sortProtocol = (a: Her2LinkedProtocol, b: Her2LinkedProtocol) =>
+      displayValue(a.protocol).localeCompare(displayValue(b.protocol), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+
+    blocks.push({
+      productRequirement,
+      requirementText,
+      projects: uniqueSorted(groupRows.map((r) => r.Project)),
+      riskScopes: uniqueSorted(groupRows.map((r) => r.RiskScope)),
+      risks: [...riskMap.values()].sort(sortRisk),
+      protocols: [...protocolMap.values()].sort(sortProtocol),
+      rowCount: groupRows.length,
+    });
+  }
+
+  return blocks.sort((a, b) =>
+    a.productRequirement.localeCompare(b.productRequirement, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    }),
+  );
+}

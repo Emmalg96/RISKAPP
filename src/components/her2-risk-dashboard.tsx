@@ -19,6 +19,7 @@ import {
   EMPTY_HER2_FILTERS,
   displayValue,
   filterHer2ExplorerRows,
+  groupHer2ExplorerRowsByProductRequirement,
   rowRmwFamily,
   toggleMultiValue,
   toggleRmwFamily,
@@ -26,6 +27,10 @@ import {
   type Her2ExplorerDataset,
   type Her2ExplorerFilters,
   type Her2ExplorerRow,
+  type Her2LinkedProtocol,
+  type Her2LinkedRisk,
+  type Her2ProductRequirementBlock,
+  type Her2ViewMode,
   type ProjectFilter,
   type RmwFamily,
 } from "@/lib/her2-explorer";
@@ -134,10 +139,153 @@ function RiskCard({ row }: { row: Her2ExplorerRow }) {
   );
 }
 
+function LinkedRiskItem({ risk }: { risk: Her2LinkedRisk }) {
+  return (
+    <li className="rounded-md border border-border/70 bg-background/50 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary" className="font-mono text-[11px] uppercase tracking-wide">
+          {displayValue(risk.riskLine)}
+        </Badge>
+        {risk.rmwFamily !== "other" && (
+          <Badge variant="outline" className="text-[10px]">
+            {risk.rmwFamily}
+          </Badge>
+        )}
+      </div>
+      <p className="mt-2 font-medium leading-snug text-foreground">{displayValue(risk.riskSummary)}</p>
+      <dl className="mt-2 space-y-1 text-xs text-muted-foreground">
+        <div>
+          <dt className="sr-only">Risk source</dt>
+          <dd>
+            <span className="font-medium text-foreground/80">Source:</span> {displayValue(risk.riskSource)}
+          </dd>
+        </div>
+        <div>
+          <dt className="sr-only">Risk scope</dt>
+          <dd>
+            <span className="font-medium text-foreground/80">Scope:</span> {displayValue(risk.riskScope)}
+          </dd>
+        </div>
+      </dl>
+    </li>
+  );
+}
+
+function LinkedProtocolItem({ protocol }: { protocol: Her2LinkedProtocol }) {
+  const acSnippet =
+    protocol.acceptanceCriteriaStatus.trim() ||
+    protocol.protocolAcceptanceCriteria.trim() ||
+    protocol.overarchingAcceptanceCriteria.trim();
+
+  return (
+    <li className="rounded-md border border-border/70 bg-background/50 p-3 text-sm">
+      <Badge className="bg-primary/10 font-mono text-[11px] text-primary hover:bg-primary/15">
+        {displayValue(protocol.protocol)}
+      </Badge>
+      {protocol.acceptanceCriteriaStatus.trim() && (
+        <p className="mt-2 text-xs">
+          <span className="font-semibold uppercase tracking-wide text-muted-foreground">AC status</span>
+          <span className="mt-0.5 block text-foreground">{displayValue(protocol.acceptanceCriteriaStatus)}</span>
+        </p>
+      )}
+      {acSnippet && !protocol.acceptanceCriteriaStatus.trim() && (
+        <p className="mt-2 line-clamp-4 text-xs text-muted-foreground">{displayValue(acSnippet)}</p>
+      )}
+      {protocol.acceptanceCriteriaStatus.trim() && acSnippet !== protocol.acceptanceCriteriaStatus.trim() && (
+        <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">
+          {displayValue(protocol.protocolAcceptanceCriteria || protocol.overarchingAcceptanceCriteria)}
+        </p>
+      )}
+    </li>
+  );
+}
+
+function ProductRequirementHubBlock({ block }: { block: Her2ProductRequirementBlock }) {
+  return (
+    <Card className="border-border/80 bg-card/95 shadow-sm">
+      <CardContent className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-6 lg:p-6">
+        <section aria-labelledby={`pr-${block.productRequirement}-risks`} className="min-w-0 space-y-2">
+          <h3
+            id={`pr-${block.productRequirement}-risks`}
+            className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            Linked risks ({block.risks.length})
+          </h3>
+          {block.risks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No risks in filtered rows.</p>
+          ) : (
+            <ul className="space-y-2">
+              {block.risks.map((risk) => (
+                <LinkedRiskItem key={`${block.productRequirement}-${displayValue(risk.riskLine)}`} risk={risk} />
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section
+          aria-labelledby={`pr-${block.productRequirement}-center`}
+          className="min-w-0 rounded-lg border border-primary/20 bg-primary/[0.03] p-4 lg:px-5"
+        >
+          <h3 id={`pr-${block.productRequirement}-center`} className="sr-only">
+            Product requirement {block.productRequirement}
+          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="font-mono text-sm">
+              {displayValue(block.productRequirement)}
+            </Badge>
+            {block.projects.map((project) => (
+              <Badge key={project} variant="secondary">
+                {project}
+              </Badge>
+            ))}
+          </div>
+          {block.riskScopes.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {block.riskScopes.map((scope) => (
+                <Badge key={scope} variant="outline" className="max-w-full whitespace-normal text-left text-[10px] font-normal">
+                  {scope}
+                </Badge>
+              ))}
+            </div>
+          )}
+          <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground">
+            {displayValue(block.requirementText)}
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {block.rowCount} explorer row{block.rowCount === 1 ? "" : "s"} for this PR under current filters
+          </p>
+        </section>
+
+        <section aria-labelledby={`pr-${block.productRequirement}-protocols`} className="min-w-0 space-y-2">
+          <h3
+            id={`pr-${block.productRequirement}-protocols`}
+            className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            Linked protocols ({block.protocols.length})
+          </h3>
+          {block.protocols.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No protocols in filtered rows.</p>
+          ) : (
+            <ul className="space-y-2">
+              {block.protocols.map((protocol) => (
+                <LinkedProtocolItem
+                  key={`${block.productRequirement}-${displayValue(protocol.protocol)}`}
+                  protocol={protocol}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function Her2RiskDashboard() {
   const [dataset, setDataset] = useState<Her2ExplorerDataset | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Her2ExplorerFilters>(EMPTY_HER2_FILTERS);
+  const [viewMode, setViewMode] = useState<Her2ViewMode>("byPr");
 
   useEffect(() => {
     let cancelled = false;
@@ -172,6 +320,11 @@ export function Her2RiskDashboard() {
   const filteredRows = useMemo(
     () => (dataset ? filterHer2ExplorerRows(dataset.rows, filters) : []),
     [dataset, filters],
+  );
+
+  const prBlocks = useMemo(
+    () => groupHer2ExplorerRowsByProductRequirement(filteredRows),
+    [filteredRows],
   );
 
   if (loadError) {
@@ -269,9 +422,41 @@ export function Her2RiskDashboard() {
                 onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
               />
             </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">View</Label>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Result layout">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "byPr" ? "default" : "outline"}
+                  onClick={() => setViewMode("byPr")}
+                >
+                  By PR
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "allRows" ? "default" : "outline"}
+                  onClick={() => setViewMode("allRows")}
+                >
+                  All rows
+                </Button>
+              </div>
+            </div>
             <p className="text-sm text-muted-foreground">
-              Showing <span className="font-medium text-foreground">{filteredRows.length}</span> of{" "}
-              {dataset.rowCount}
+              {viewMode === "byPr" ? (
+                <>
+                  Showing{" "}
+                  <span className="font-medium text-foreground">{prBlocks.length}</span> PR block
+                  {prBlocks.length === 1 ? "" : "s"} (
+                  <span className="font-medium text-foreground">{filteredRows.length}</span> rows)
+                </>
+              ) : (
+                <>
+                  Showing <span className="font-medium text-foreground">{filteredRows.length}</span> of{" "}
+                  {dataset.rowCount} rows
+                </>
+              )}
             </p>
             <Button
               type="button"
@@ -290,6 +475,10 @@ export function Her2RiskDashboard() {
           <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             No rows match the current filters.
           </p>
+        ) : viewMode === "byPr" ? (
+          prBlocks.map((block) => (
+            <ProductRequirementHubBlock key={block.productRequirement} block={block} />
+          ))
         ) : (
           filteredRows.map((row) => (
             <RiskCard key={`${row.RiskLine}-${row.Protocol}-${row.ProductRequirement}-${row.RiskSummary}`} row={row} />
